@@ -2,8 +2,8 @@ const User = require('../models/userModel');
 const OTP = require('../models/optModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { generateOTP } = require('../utils.js/otp');
-const { sendOTPEmail } = require('../utils.js/mailer');
+const { generateOTP } = require('../utils/otp');
+const { sendOTPEmail } = require('../utils/mailer');
 require('dotenv').config();
 
 // Step 1: User submits email and password
@@ -76,7 +76,12 @@ const verifyOTPAndLogin = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { 
+        id: user._id,
+        email: user.email,
+        name: user.username, // Include name in token payload
+        role: user.role 
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -86,7 +91,7 @@ const verifyOTPAndLogin = async (req, res) => {
       token,
       user: {
         id: user._id,
-        username: user.username,
+        name: user.username,
         email: user.email,
         role: user.role
       }
@@ -166,9 +171,40 @@ const register = async (req, res) => {
   }
 };
 
+const checkAuth = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      user: {
+        id: user._id,
+        name: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in checkAuth:', error);
+    res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
+
+
 module.exports = { 
   register,
   initiateLogin,
   verifyOTPAndLogin,
-  resendOTP
+  resendOTP,
+  checkAuth    
 };
